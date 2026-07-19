@@ -1,0 +1,2300 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Recanto das Aves">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#FAF3E3">
+<title>Recanto das Aves</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Biblioteca de login Microsoft (MSAL), usada para sincronizar com a planilha do Excel Online.
+     Carregada via CDN: se o app abrir sem internet, esse script simplesmente não carrega
+     e a sincronização fica desativada automaticamente — o app continua funcionando 100% offline. -->
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js" defer></script>
+<!-- PWA: registro do service worker (funcionamento offline e instalação no iOS/Android) -->
+<script>
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch((e) => {
+        console.error('Não foi possível registrar o service worker', e);
+      });
+    });
+  }
+</script>
+<style>
+  :root{
+    --cream: #FAF3E3;
+    --cream-2: #F3EAD4;
+    --card: #FFFFFF;
+    --brown: #3E2C1F;
+    --brown-soft: #7A6A57;
+    --yolk: #E3A438;
+    --yolk-dark: #B97F1F;
+    --olive: #6E8156;
+    --olive-bg: #E6ECD9;
+    --amber: #C9862F;
+    --amber-bg: #F5E4C8;
+    --blue: #4C7A94;
+    --blue-bg: #DCE9EE;
+    --border: rgba(62,44,31,0.12);
+    --shadow: 0 2px 10px rgba(62,44,31,0.08);
+  }
+  *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body{
+    margin:0; padding:0; height:100%;
+    background: var(--cream);
+    color: var(--brown);
+    font-family: 'Inter', -apple-system, sans-serif;
+    overscroll-behavior-y: none;
+  }
+  #app{
+    max-width: 480px;
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--cream);
+    position: relative;
+  }
+  header{
+    padding: env(safe-area-inset-top,0px) 20px 14px 20px;
+    background: var(--cream);
+    position: sticky; top:0; z-index: 10;
+    border-bottom: 1px solid var(--border);
+  }
+  header .row{
+    display:flex; align-items:center; gap:10px;
+    padding-top: 14px;
+  }
+  .egg-mark{
+    width: 34px; height: 40px;
+    background: linear-gradient(180deg, #F4C868, var(--yolk));
+    border-radius: 50% 50% 48% 48% / 58% 58% 42% 42%;
+    flex-shrink:0;
+    box-shadow: inset 0 -6px 8px rgba(185,127,31,0.35);
+  }
+  header h1{
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 600;
+    font-size: 20px;
+    margin: 0;
+    letter-spacing: -0.2px;
+  }
+  header p{
+    margin: 2px 0 0 0;
+    font-size: 12.5px;
+    color: var(--brown-soft);
+  }
+  main{
+    flex: 1;
+    padding: 16px 16px 90px 16px;
+    overflow-y: auto;
+  }
+  .empty-state{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center;
+    padding: 60px 24px;
+    color: var(--brown-soft);
+  }
+  .empty-state .icon{
+    font-size: 40px;
+    margin-bottom: 10px;
+  }
+  .empty-state h3{
+    font-family:'Fredoka', sans-serif;
+    font-weight:600;
+    color: var(--brown);
+    margin: 0 0 6px 0;
+    font-size: 16px;
+  }
+  .empty-state p{
+    margin:0;
+    font-size: 13.5px;
+    line-height:1.5;
+    max-width: 280px;
+  }
+  nav.tabbar{
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 480px;
+    background: var(--card);
+    border-top: 1px solid var(--border);
+    display: flex;
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom,0px)) 8px;
+    z-index: 20;
+  }
+  nav.tabbar button{
+    flex: 1;
+    background: none;
+    border: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 4px;
+    border-radius: 12px;
+    color: var(--brown-soft);
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color .15s ease, background .15s ease;
+  }
+  nav.tabbar button .tab-icon{
+    width: 22px; height: 22px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  nav.tabbar button.active{
+    color: var(--yolk-dark);
+    background: var(--cream-2);
+  }
+  nav.tabbar svg{ width: 22px; height: 22px; }
+  .tab-panel{ display:none; }
+  .tab-panel.active{ display:block; }
+  .card{
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    box-shadow: var(--shadow);
+  }
+
+  .fab-add{
+    width: 100%;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    background: var(--yolk);
+    color: #3E2C1F;
+    border: none;
+    border-radius: 12px;
+    padding: 13px;
+    font-family:'Inter', sans-serif;
+    font-weight:600;
+    font-size: 14.5px;
+    margin-bottom: 16px;
+    cursor:pointer;
+    box-shadow: 0 3px 10px rgba(227,164,56,0.35);
+  }
+  .fab-add svg{ width:19px; height:19px; }
+  .fab-add:active{ transform: scale(0.98); }
+
+  .form-card{ margin-bottom: 18px; display:flex; flex-direction:column; gap:12px; }
+  .field{ display:flex; flex-direction:column; gap:5px; flex:1; }
+  .field-row{ display:flex; gap:10px; }
+  .field label{
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--brown-soft);
+  }
+  .field input, .field select{
+    border: 1px solid var(--border);
+    background: var(--cream-2);
+    border-radius: 10px;
+    padding: 10px 11px;
+    font-family: 'Inter', sans-serif;
+    font-size: 14.5px;
+    color: var(--brown);
+    width: 100%;
+  }
+  .field input:focus, .field select:focus{
+    outline: none;
+    border-color: var(--yolk-dark);
+  }
+  .form-actions{ display:flex; gap:10px; margin-top: 4px; }
+  .btn-primary, .btn-secondary{
+    flex:1;
+    border-radius: 10px;
+    padding: 11px;
+    font-family:'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    cursor:pointer;
+    border: none;
+  }
+  .btn-primary{ background: var(--brown); color: var(--cream); }
+  .btn-secondary{ background: var(--cream-2); color: var(--brown-soft); border: 1px solid var(--border); }
+
+  .sale-item{
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 13px 14px;
+    margin-bottom: 10px;
+    box-shadow: var(--shadow);
+  }
+  .sale-item .top-row{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    gap: 10px;
+  }
+  .sale-item .buyer{
+    font-family:'Fredoka', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .sale-item .meta{
+    font-size: 12px;
+    color: var(--brown-soft);
+    margin-top: 2px;
+  }
+  .sale-item .value{
+    font-weight: 600;
+    font-size: 15.5px;
+    white-space: nowrap;
+  }
+  .sale-item .bottom-row{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-top: 10px;
+  }
+  .badge{
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+  }
+  .badge.vendido{ background: var(--blue-bg); color: var(--blue); }
+  .badge.entregue{ background: var(--amber-bg); color: var(--amber); }
+  .badge.pago{ background: var(--olive-bg); color: var(--olive); }
+  .sale-item select.status-select{
+    border: none;
+    background: none;
+    font-size: 12px;
+    color: var(--brown-soft);
+    font-family:'Inter', sans-serif;
+  }
+  .icon-btn{
+    background:none; border:none; color: var(--brown-soft);
+    cursor:pointer; padding: 4px;
+    display:flex; align-items:center;
+  }
+  .icon-btn svg{ width:17px; height:17px; }
+
+  .filter-toggle-row{
+    display:flex; justify-content:flex-end;
+    margin: -6px 0 12px 0;
+  }
+  .btn-filter-toggle{
+    display:flex; align-items:center; gap:6px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--brown-soft);
+    font-family:'Inter', sans-serif;
+    font-weight:600;
+    font-size: 13px;
+    padding: 8px 13px;
+    border-radius: 10px;
+    cursor:pointer;
+  }
+  .btn-filter-toggle.has-filters{
+    color: var(--yolk-dark);
+    border-color: var(--yolk-dark);
+    background: var(--cream-2);
+  }
+  .btn-filter-toggle svg{ width:16px; height:16px; }
+  .filter-badge{
+    background: var(--yolk-dark);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    min-width: 17px; height:17px;
+    border-radius: 9px;
+    display:flex; align-items:center; justify-content:center;
+    padding: 0 4px;
+  }
+  .filter-panel{
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    box-shadow: var(--shadow);
+    margin-bottom: 16px;
+    display:flex; flex-direction:column; gap:12px;
+  }
+  .filter-panel .btn-secondary{ width:100%; }
+
+  .dash-filter-row{
+    display:flex; gap:10px;
+    margin-bottom: 16px;
+  }
+  .dash-filter-row .field{ flex:1; }
+  .dash-clear{
+    background: none;
+    border: none;
+    color: var(--brown-soft);
+    font-family:'Inter', sans-serif;
+    font-size: 12.5px;
+    font-weight: 600;
+    text-decoration: underline;
+    cursor: pointer;
+    padding: 0;
+    margin: -10px 0 16px 0;
+    align-self: flex-start;
+  }
+  .dash-grid{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .dash-card{
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 15px;
+    box-shadow: var(--shadow);
+  }
+  .dash-card.full{ grid-column: 1 / -1; }
+  .dash-card .dash-label{
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--brown-soft);
+    display:flex; align-items:center; gap:6px;
+  }
+  .dash-card .dash-dot{
+    width:8px; height:8px; border-radius:50%;
+    flex-shrink:0;
+  }
+  .dash-card.total .dash-dot{ background: var(--yolk-dark); }
+  .dash-card.recebido .dash-dot{ background: var(--olive); }
+  .dash-card.areceber .dash-dot{ background: var(--amber); }
+  .dash-card .dash-amount{
+    font-family:'Fredoka', sans-serif;
+    font-weight: 600;
+    font-size: 21px;
+    margin-top: 6px;
+  }
+  .dash-card.total .dash-amount{ color: var(--yolk-dark); }
+  .dash-card.recebido .dash-amount{ color: var(--olive); }
+  .dash-card.areceber .dash-amount{ color: var(--amber-dark, var(--amber)); }
+  .dash-mini-row{
+    display:flex; justify-content:space-between;
+    font-size: 13px;
+    color: var(--brown-soft);
+  }
+  .dash-mini-row strong{ color: var(--brown); font-weight:600; }
+
+  .client-item{
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 13px 14px;
+    margin-bottom: 10px;
+    box-shadow: var(--shadow);
+    display:flex; align-items:center; justify-content:space-between;
+    gap: 10px;
+    cursor: pointer;
+  }
+  .client-item .client-info{ min-width:0; }
+  .client-item .client-name{
+    font-family:'Fredoka', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .client-item .client-phone{
+    font-size: 12.5px;
+    color: var(--brown-soft);
+    margin-top: 2px;
+    text-decoration: none;
+  }
+  .client-item .client-phone:not(.no-phone){ color: var(--blue); }
+  .client-item .client-debt{
+    text-align:right;
+    flex-shrink:0;
+  }
+  .client-item .client-debt .amount{
+    font-weight: 700;
+    font-size: 14.5px;
+    white-space: nowrap;
+  }
+  .client-item .client-debt .amount.devendo{ color: var(--amber-dark, var(--amber)); }
+  .client-item .client-debt .amount.em-dia{ color: var(--olive); }
+  .client-item .client-debt .tag{
+    font-size: 10.5px;
+    color: var(--brown-soft);
+    text-transform: uppercase;
+    letter-spacing: .3px;
+  }
+
+  .backup-section{
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+    display:flex; flex-direction:column; gap:10px;
+  }
+  .backup-title{
+    font-family:'Fredoka', sans-serif;
+    font-weight: 600;
+    font-size: 14.5px;
+  }
+  .backup-desc{
+    font-size: 12.5px;
+    color: var(--brown-soft);
+    line-height: 1.5;
+    margin: -4px 0 2px 0;
+  }
+
+  /* ---------- Sincronização com o Excel Online ---------- */
+  .sync-section{ display:flex; flex-direction:column; gap:10px; margin-bottom: 4px; }
+  .sync-status-row{
+    display:flex; align-items:center; gap:8px;
+    background: var(--cream-2);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .sync-dot{
+    width:9px; height:9px; border-radius:50%;
+    background: var(--brown-soft);
+    flex-shrink:0;
+  }
+  .sync-dot.ok{ background: var(--olive); }
+  .sync-dot.syncing{ background: var(--yolk); animation: sync-pulse 1s infinite ease-in-out; }
+  .sync-dot.error{ background: #B84C3E; }
+  .sync-dot.offline{ background: var(--brown-soft); }
+  @keyframes sync-pulse{
+    0%,100%{ opacity:1; } 50%{ opacity:.35; }
+  }
+  .sync-status-text{ font-size: 12.5px; color: var(--brown-soft); flex:1; line-height:1.4; }
+  .sync-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .sync-actions .btn-secondary, .sync-actions .btn-primary{ flex: unset; padding: 9px 14px; font-size: 13px; }
+  .sync-config{
+    display:flex; flex-direction:column; gap:8px;
+    background: var(--cream-2);
+    border-radius: 10px;
+    padding: 12px;
+  }
+  .sync-config .field label{ font-size: 12px; }
+  .sync-toggle-link{
+    background:none; border:none; padding:0;
+    color: var(--blue);
+    font-size: 12.5px;
+    font-weight:600;
+    text-align:left;
+    cursor:pointer;
+    font-family:'Inter', sans-serif;
+  }
+  .header-sync-dot{
+    width:8px; height:8px; border-radius:50%;
+    background: var(--brown-soft);
+    display:inline-block;
+    margin-left:6px;
+    vertical-align: middle;
+  }
+  .header-sync-dot.ok{ background: var(--olive); }
+  .header-sync-dot.syncing{ background: var(--yolk); animation: sync-pulse 1s infinite ease-in-out; }
+  .header-sync-dot.error{ background: #B84C3E; }
+
+  .suggestions-dropdown{
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin-top: 4px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 6px 16px rgba(62,44,31,0.14);
+    max-height: 190px;
+    overflow-y: auto;
+    z-index: 30;
+  }
+  .suggestions-dropdown .suggestion-item{
+    padding: 10px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+  }
+  .suggestions-dropdown .suggestion-item:last-child{ border-bottom: none; }
+  .suggestions-dropdown .suggestion-item:active,
+  .suggestions-dropdown .suggestion-item.active{
+    background: var(--cream-2);
+  }
+  .suggestions-dropdown .suggestion-name{
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--brown);
+  }
+  .suggestions-dropdown .suggestion-phone{
+    font-size: 12px;
+    color: var(--brown-soft);
+    margin-top: 1px;
+  }
+
+  .qty-field-label{
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--brown-soft);
+    margin-bottom: 2px;
+    display:block;
+  }
+  .qty-btn-row{ display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .qty-big-btn{
+    flex:1;
+    background: var(--cream-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    font-family:'Inter', sans-serif;
+    font-weight:600;
+    color: var(--brown);
+    cursor:pointer;
+    text-align:center;
+    font-size: 14px;
+  }
+  .qty-big-btn small{ font-weight:500; color:var(--brown-soft); font-size:11.5px; }
+  .qty-big-btn:active{ background: var(--amber-bg); }
+  .qty-counter-box{
+    display:flex; align-items:center; gap:9px;
+    background: var(--card);
+    border:1px solid var(--border);
+    border-radius: 10px;
+    padding: 7px 12px;
+    min-width: 56px;
+    justify-content:center;
+    flex-shrink:0;
+  }
+  .qty-mini-btn{
+    width:24px; height:24px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--cream-2);
+    color: var(--brown-soft);
+    font-size: 16px;
+    line-height: 1;
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    padding:0;
+  }
+  .qty-count{ font-weight:700; font-size:15px; min-width:16px; text-align:center; }
+  .qty-total{
+    font-size: 13px;
+    color: var(--brown-soft);
+    text-align:right;
+    margin-top: 2px;
+  }
+  .qty-total strong{ color: var(--brown); }
+
+  .payment-type-row{ display:flex; gap:10px; }
+  .payment-type-btn{
+    flex:1;
+    border: 1px solid var(--border);
+    background: var(--cream-2);
+    border-radius: 10px;
+    padding: 12px;
+    font-family:'Inter', sans-serif;
+    font-weight:600;
+    font-size:14px;
+    color: var(--brown-soft);
+    cursor:pointer;
+  }
+  .payment-type-btn.selected{
+    background: var(--olive-bg);
+    border-color: var(--olive);
+    color: var(--olive);
+  }
+  .payment-meta{ color: var(--olive); font-weight:600; }
+
+  .modal-overlay{
+    position:fixed; inset:0;
+    background: rgba(62,44,31,0.45);
+    display:flex; align-items:flex-end; justify-content:center;
+    z-index: 200;
+  }
+  .modal-overlay.hidden{ display:none; }
+  .modal-sheet{
+    background: var(--cream);
+    width:100%; max-width:480px;
+    border-radius: 18px 18px 0 0;
+    padding: 16px 20px calc(18px + env(safe-area-inset-bottom,0px)) 20px;
+    max-height: 82vh;
+    overflow-y:auto;
+    box-shadow: 0 -8px 26px rgba(62,44,31,0.28);
+    display:flex; flex-direction:column; gap:12px;
+  }
+  .modal-sheet h3{
+    font-family:'Fredoka', sans-serif; font-weight:600; font-size:18px; margin:0;
+  }
+  .modal-subtitle{ font-size:12.5px; color:var(--brown-soft); margin: -6px 0 4px 0; }
+  .modal-close-row{ display:flex; justify-content:flex-end; margin: -4px -4px -6px 0; }
+
+  .pedido-item{
+    background: var(--card);
+    border:1px solid var(--border);
+    border-radius: 12px;
+    padding: 11px 13px;
+    margin-bottom: 8px;
+  }
+  .pedido-top{ display:flex; justify-content:space-between; align-items:center; }
+  .pedido-numero{ font-weight:700; font-size:13px; color: var(--brown-soft); }
+  .pedido-meta{ font-size:12px; color:var(--brown-soft); margin-top:4px; }
+  .pedido-bottom{ display:flex; justify-content:space-between; align-items:center; margin-top:8px; }
+  .pedido-valor{ font-weight:600; font-size:14px; }
+  .pedido-pagamento{ font-size:11.5px; color: var(--olive); font-weight:600; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <div class="row">
+      <div class="egg-mark"></div>
+      <div>
+        <h1 id="header-title">Vendas<span id="header-sync-dot" class="header-sync-dot" title="Status da sincronização"></span></h1>
+        <p id="header-subtitle">Recanto das Aves</p>
+      </div>
+    </div>
+  </header>
+
+  <main>
+
+    <section id="tab-vendas" class="tab-panel active">
+
+      <button id="btn-nova-venda" class="fab-add">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Nova venda
+      </button>
+
+      <form id="form-venda" class="card form-card" style="display:none;">
+        <div id="form-edit-badge" style="display:none; font-size:12.5px; font-weight:600; color: var(--brown-soft);">
+          Editando pedido <span id="form-edit-numero"></span>
+        </div>
+
+        <div class="field" style="position:relative;">
+          <label for="f-nome">Nome do comprador</label>
+          <input type="text" id="f-nome" autocomplete="off" placeholder="Ex: Maria Souza" required>
+          <div id="lista-sugestoes-clientes" class="suggestions-dropdown" style="display:none;"></div>
+        </div>
+
+        <div class="field">
+          <label for="f-telefone">Telefone</label>
+          <input type="tel" id="f-telefone" placeholder="(69) 99999-9999">
+        </div>
+
+        <div class="field">
+          <label for="f-data">Data da venda</label>
+          <input type="date" id="f-data" required>
+        </div>
+
+        <div class="field">
+          <label class="qty-field-label">Quantidade de ovos</label>
+          <div class="qty-btn-row">
+            <button type="button" id="btn-add-duzia" class="qty-big-btn">Dúzia <small>(12 ovos)</small></button>
+            <div class="qty-counter-box">
+              <button type="button" id="btn-sub-duzia" class="qty-mini-btn" aria-label="Diminuir dúzias">−</button>
+              <span id="count-duzia" class="qty-count">0</span>
+            </div>
+          </div>
+          <div class="qty-btn-row">
+            <button type="button" id="btn-add-cartela" class="qty-big-btn">Cartela <small>(30 ovos)</small></button>
+            <div class="qty-counter-box">
+              <button type="button" id="btn-sub-cartela" class="qty-mini-btn" aria-label="Diminuir cartelas">−</button>
+              <span id="count-cartela" class="qty-count">0</span>
+            </div>
+          </div>
+          <input type="number" id="f-qtd-avulso" min="0" placeholder="Quantidade avulsa (opcional)">
+          <div class="qty-total">Total: <strong id="qtd-total-label">0 ovos</strong></div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="f-valor">Valor (R$)</label>
+            <input type="number" id="f-valor" min="0" step="0.01" placeholder="0,00" required>
+          </div>
+          <div class="field">
+            <label for="f-status">Status</label>
+            <select id="f-status">
+              <option value="vendido">Vendido</option>
+              <option value="entregue">Entregue</option>
+              <option value="pago">Pago</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" id="btn-cancelar" class="btn-secondary">Cancelar</button>
+          <button type="submit" class="btn-primary">Salvar venda</button>
+        </div>
+      </form>
+
+      <div class="filter-toggle-row">
+        <button id="btn-toggle-filtros" class="btn-filter-toggle" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+          Filtros
+          <span id="filtro-badge" class="filter-badge" style="display:none;">0</span>
+        </button>
+      </div>
+
+      <div id="painel-filtros" class="filter-panel" style="display:none;">
+        <div class="field">
+          <label for="f-filtro-nome">Cliente</label>
+          <input type="text" id="f-filtro-nome" placeholder="Buscar por nome">
+        </div>
+        <div class="field">
+          <label for="f-filtro-status">Status</label>
+          <select id="f-filtro-status">
+            <option value="todos">Todos</option>
+            <option value="vendido">Vendido</option>
+            <option value="entregue">Entregue</option>
+            <option value="pago">Pago</option>
+          </select>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="f-filtro-de">De</label>
+            <input type="date" id="f-filtro-de">
+          </div>
+          <div class="field">
+            <label for="f-filtro-ate">Até</label>
+            <input type="date" id="f-filtro-ate">
+          </div>
+        </div>
+        <button id="btn-limpar-filtros" class="btn-secondary" type="button">Limpar filtros</button>
+      </div>
+
+      <div id="lista-vendas"></div>
+
+      <div id="vendas-empty" class="empty-state">
+        <div class="icon">🥚</div>
+        <h3>Nenhuma venda cadastrada</h3>
+        <p>Toque em "Nova venda" para registrar a primeira.</p>
+      </div>
+
+      <div id="vendas-empty-filtro" class="empty-state" style="display:none;">
+        <div class="icon">🔍</div>
+        <h3>Nenhuma venda encontrada</h3>
+        <p>Tente ajustar ou limpar os filtros.</p>
+      </div>
+
+    </section>
+
+    <section id="tab-dashboard" class="tab-panel">
+
+      <div class="dash-filter-row">
+        <div class="field">
+          <label for="f-dash-de">De</label>
+          <input type="date" id="f-dash-de">
+        </div>
+        <div class="field">
+          <label for="f-dash-ate">Até</label>
+          <input type="date" id="f-dash-ate">
+        </div>
+      </div>
+      <button id="btn-dash-limpar" class="dash-clear" type="button">Limpar período</button>
+
+      <div class="dash-grid">
+        <div class="dash-card total full">
+          <div class="dash-label"><span class="dash-dot"></span>Total vendido</div>
+          <div class="dash-amount" id="dash-total-vendido">R$ 0,00</div>
+        </div>
+        <div class="dash-card recebido">
+          <div class="dash-label"><span class="dash-dot"></span>Recebido</div>
+          <div class="dash-amount" id="dash-recebido">R$ 0,00</div>
+        </div>
+        <div class="dash-card areceber">
+          <div class="dash-label"><span class="dash-dot"></span>A receber</div>
+          <div class="dash-amount" id="dash-a-receber">R$ 0,00</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="dash-mini-row" style="margin-bottom:8px;">
+          <span>Vendas no período</span>
+          <strong id="dash-qtd-vendas">0</strong>
+        </div>
+        <div class="dash-mini-row">
+          <span>Ovos vendidos</span>
+          <strong id="dash-qtd-ovos">0</strong>
+        </div>
+      </div>
+
+      <div id="dash-empty" class="empty-state" style="display:none;">
+        <div class="icon">📊</div>
+        <h3>Nenhuma venda no período</h3>
+        <p>Ajuste o filtro de data ou registre uma venda na aba Vendas.</p>
+      </div>
+
+      <div class="backup-section sync-section">
+        <div class="backup-title">Sincronização com o Excel</div>
+        <p class="backup-desc">Os dados são salvos primeiro neste aparelho e funcionam sem internet. Quando conectado à Microsoft e à internet, tudo é enviado automaticamente para a sua planilha no OneDrive.</p>
+
+        <div class="sync-status-row">
+          <span id="sync-dot" class="sync-dot"></span>
+          <span id="sync-status-text" class="sync-status-text">Verificando...</span>
+        </div>
+
+        <div class="sync-actions">
+          <button id="btn-sync-conectar" class="btn-secondary" type="button" style="display:none;">Conectar com a Microsoft</button>
+          <button id="btn-sync-agora" class="btn-secondary" type="button" style="display:none;">Sincronizar agora</button>
+          <button id="btn-sync-desconectar" class="btn-secondary" type="button" style="display:none;">Desconectar</button>
+        </div>
+
+        <button id="btn-sync-toggle-config" class="sync-toggle-link" type="button">Configurar integração</button>
+
+        <div id="sync-config" class="sync-config" style="display:none;">
+          <div class="field">
+            <label for="f-sync-client-id">ID do aplicativo (Azure AD)</label>
+            <input type="text" id="f-sync-client-id" placeholder="Cole aqui o Application (client) ID">
+          </div>
+          <div class="field">
+            <label for="f-sync-link">Link da planilha (OneDrive/Excel Online)</label>
+            <input type="text" id="f-sync-link" placeholder="https://1drv.ms/x/...">
+          </div>
+          <button id="btn-sync-salvar-config" class="btn-primary" type="button" style="margin-top:2px;">Salvar configuração</button>
+          <p class="backup-desc" style="margin-top:2px;">Precisa de um "ID do aplicativo" gratuito criado no portal da Microsoft (Azure AD) para autorizar o app a editar a planilha em seu nome. Peça para quem configurou o app esse código.</p>
+        </div>
+      </div>
+
+      <div class="backup-section">
+        <div class="backup-title">Backup dos dados</div>
+        <p class="backup-desc">Os dados ficam salvos neste navegador/aparelho. Baixe um backup de tempos em tempos e guarde em local seguro — ele também serve para levar os dados para outro celular.</p>
+        <button id="btn-backup-baixar" class="btn-secondary" type="button">Baixar backup</button>
+        <button id="btn-backup-restaurar" class="btn-secondary" type="button">Restaurar backup</button>
+        <input type="file" id="input-backup-arquivo" accept="application/json" style="display:none;">
+      </div>
+
+    </section>
+
+    <section id="tab-clientes" class="tab-panel">
+
+      <div id="lista-clientes-cards"></div>
+
+      <div id="clientes-empty" class="empty-state">
+        <div class="icon">👤</div>
+        <h3>Nenhum cliente cadastrado</h3>
+        <p>Os clientes serão adicionados automaticamente conforme você registrar vendas.</p>
+      </div>
+
+    </section>
+
+  </main>
+
+  <nav class="tabbar">
+    <button class="tab-btn active" data-tab="vendas" data-title="Vendas" data-subtitle="Recanto das Aves">
+      <span class="tab-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21c-4.5 0-7.5-3.6-7.5-8 0-4 3.2-9.5 7.5-10.5 4.3 1 7.5 6.5 7.5 10.5 0 4.4-3 8-7.5 8Z"/></svg>
+      </span>
+      Vendas
+    </button>
+    <button class="tab-btn" data-tab="dashboard" data-title="Dashboard" data-subtitle="Resumo financeiro">
+      <span class="tab-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>
+      </span>
+      Dashboard
+    </button>
+    <button class="tab-btn" data-tab="clientes" data-title="Clientes" data-subtitle="Contatos e saldo devedor">
+      <span class="tab-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.3"/><path d="M5 20c0-3.6 3-6 7-6s7 2.4 7 6"/></svg>
+      </span>
+      Clientes
+    </button>
+  </nav>
+
+  <div id="modal-pagamento" class="modal-overlay hidden">
+    <div class="modal-sheet">
+      <h3>Confirmar pagamento</h3>
+      <p class="modal-subtitle">Informe como e quando o pagamento foi recebido.</p>
+      <div class="field">
+        <label>Forma de pagamento</label>
+        <div class="payment-type-row">
+          <button type="button" class="payment-type-btn" data-tipo="pix">Pix</button>
+          <button type="button" class="payment-type-btn" data-tipo="dinheiro">Dinheiro</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="modal-pagamento-data">Data do pagamento</label>
+        <input type="date" id="modal-pagamento-data">
+      </div>
+      <div class="form-actions">
+        <button type="button" id="modal-pagamento-cancelar" class="btn-secondary">Cancelar</button>
+        <button type="button" id="modal-pagamento-confirmar" class="btn-primary">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-cliente-pedidos" class="modal-overlay hidden">
+    <div class="modal-sheet">
+      <div class="modal-close-row">
+        <button type="button" id="btn-fechar-modal-cliente" class="icon-btn" aria-label="Fechar">✕</button>
+      </div>
+      <h3 id="modal-cliente-nome">Cliente</h3>
+      <p class="modal-subtitle" id="modal-cliente-resumo"></p>
+      <div id="modal-cliente-lista-pedidos"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ---------- Navegação entre abas ----------
+  const buttons = document.querySelectorAll('.tab-btn');
+  const panels = document.querySelectorAll('.tab-panel');
+  const headerTitle = document.getElementById('header-title');
+  const headerSubtitle = document.getElementById('header-subtitle');
+
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.tab;
+
+      buttons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      panels.forEach(p => p.classList.remove('active'));
+      document.getElementById('tab-' + tab).classList.add('active');
+
+      headerTitle.textContent = btn.dataset.title;
+      headerSubtitle.textContent = btn.dataset.subtitle;
+
+      // lembra a última aba aberta
+      saveLastTab(tab);
+    });
+  });
+
+  // ---------- Armazenamento simples (localStorage do navegador) ----------
+  // Usado só para preferências pequenas (aba atual, contador de pedido, config de
+  // sincronização). Os dados de verdade (vendas e clientes) ficam no IndexedDB,
+  // veja o bloco "Armazenamento offline (IndexedDB)" mais abaixo.
+  const STORAGE_PREFIX = 'recanto_aves:';
+
+  function storageGet(key){
+    try{
+      return localStorage.getItem(STORAGE_PREFIX + key);
+    }catch(e){
+      console.error('Não foi possível ler do armazenamento local', e);
+      return null;
+    }
+  }
+
+  function storageSet(key, value){
+    try{
+      localStorage.setItem(STORAGE_PREFIX + key, value);
+      return true;
+    }catch(e){
+      console.error('Não foi possível salvar no armazenamento local', e);
+      alert('Não foi possível salvar os dados. O armazenamento do navegador pode estar cheio ou bloqueado (ex: modo anônimo).');
+      return false;
+    }
+  }
+
+  function saveLastTab(tab){
+    storageSet('last_tab', tab);
+  }
+
+  function restoreLastTab(){
+    const tab = storageGet('last_tab');
+    if(tab){
+      const btn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+      if(btn) btn.click();
+    }
+  }
+
+  restoreLastTab();
+
+  // ---------- Armazenamento offline (IndexedDB) ----------
+  // Guarda vendas e clientes de verdade no aparelho, funciona 100% sem internet.
+  // Quando a internet e o login com a Microsoft estiverem disponíveis, o bloco de
+  // "Sincronização com o Excel Online" (mais abaixo) envia/mescla esses dados
+  // com a planilha automaticamente.
+  const IDB_NOME = 'recanto_aves_db';
+  const IDB_VERSAO = 1;
+  let idbPromise = null;
+
+  function idbAbrir(){
+    if(idbPromise) return idbPromise;
+    idbPromise = new Promise((resolve, reject) => {
+      if(!('indexedDB' in window)){
+        reject(new Error('IndexedDB não suportado neste navegador.'));
+        return;
+      }
+      const req = indexedDB.open(IDB_NOME, IDB_VERSAO);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if(!db.objectStoreNames.contains('sales')) db.createObjectStore('sales', { keyPath: 'id' });
+        if(!db.objectStoreNames.contains('clients')) db.createObjectStore('clients', { keyPath: 'nomeKey' });
+        if(!db.objectStoreNames.contains('kv')) db.createObjectStore('kv', { keyPath: 'key' });
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    return idbPromise;
+  }
+
+  function idbPedido(req){
+    return new Promise((resolve, reject) => {
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function idbGetAll(nomeStore){
+    const db = await idbAbrir();
+    const store = db.transaction(nomeStore, 'readonly').objectStore(nomeStore);
+    return idbPedido(store.getAll());
+  }
+
+  // Substitui todo o conteúdo do "store" pelos itens informados (transação única).
+  async function idbSubstituirTudo(nomeStore, itens){
+    const db = await idbAbrir();
+    const tx = db.transaction(nomeStore, 'readwrite');
+    tx.objectStore(nomeStore).clear();
+    itens.forEach(item => tx.objectStore(nomeStore).put(item));
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  async function idbGravarVarios(nomeStore, itens){
+    const db = await idbAbrir();
+    const tx = db.transaction(nomeStore, 'readwrite');
+    itens.forEach(item => tx.objectStore(nomeStore).put(item));
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  async function idbKvGet(chave){
+    const db = await idbAbrir();
+    const store = db.transaction('kv', 'readonly').objectStore('kv');
+    const r = await idbPedido(store.get(chave));
+    return r ? r.valor : undefined;
+  }
+
+  async function idbKvSet(chave, valor){
+    const db = await idbAbrir();
+    const store = db.transaction('kv', 'readwrite').objectStore('kv');
+    store.put({ key: chave, valor });
+    return new Promise((resolve, reject) => {
+      store.transaction.oncomplete = () => resolve();
+      store.transaction.onerror = () => reject(store.transaction.error);
+    });
+  }
+
+  // Na primeira vez que o app rodar com esta versão, importa os dados que já
+  // estavam salvos no localStorage (versão antiga) para o IndexedDB.
+  async function migrarDeLocalStorageSeNecessario(){
+    const jaMigrou = await idbKvGet('migrado_localstorage_v1');
+    if(jaMigrou) return;
+
+    const s = storageGet('sales');
+    const c = storageGet('clients');
+    const nextNumero = storageGet('next_numero');
+    let salesAntigas = [];
+    let clientsAntigos = {};
+    try{ salesAntigas = s ? JSON.parse(s) : []; }catch(e){ salesAntigas = []; }
+    try{ clientsAntigos = c ? JSON.parse(c) : {}; }catch(e){ clientsAntigos = {}; }
+
+    if(salesAntigas.length){
+      await idbGravarVarios('sales', salesAntigas);
+    }
+    const clientsArr = Object.keys(clientsAntigos).map(key => ({ nomeKey: key, ...clientsAntigos[key] }));
+    if(clientsArr.length){
+      await idbGravarVarios('clients', clientsArr);
+    }
+    if(nextNumero) storageSet('next_numero', nextNumero);
+    await idbKvSet('migrado_localstorage_v1', true);
+  }
+
+  // ---------- Dados: vendas e clientes ----------
+  let sales = [];    // { id, numero, nome, telefone, data, duzia, cartela, avulso, quantidade, valor, status, tipoPagamento, dataPagamento, atualizadoEm, excluidoEm }
+  let clients = {};  // { nomeLower: { nomeKey, nome, telefone, atualizadoEm } }
+
+  // Retorna só as vendas não excluídas — usar esta função em toda a interface.
+  // Vendas excluídas continuam guardadas (com excluidoEm preenchido) só para que
+  // a exclusão também se propague para a planilha e para os outros aparelhos.
+  function salesAtivas(){
+    return sales.filter(s => !s.excluidoEm);
+  }
+
+  async function loadData(){
+    await migrarDeLocalStorageSeNecessario();
+    sales = await idbGetAll('sales');
+    const clientsArr = await idbGetAll('clients');
+    clients = {};
+    clientsArr.forEach(c => { clients[c.nomeKey] = c; });
+    await migrarDadosAntigos();
+    renderSales();
+    inicializarSincronizacao();
+  }
+
+  // Garante que vendas salvas antes desta atualização recebam número de pedido
+  // sequencial e os novos campos de quantidade estruturada / pagamento / sincronização.
+  async function migrarDadosAntigos(){
+    let alterou = false;
+
+    const semNumero = sales.filter(s => !s.numero);
+    if(semNumero.length > 0){
+      const maiorAtual = sales.reduce((max, s) => Math.max(max, s.numero || 0), 0);
+      const ordenados = [...semNumero].sort((a,b) => a.data.localeCompare(b.data) || String(a.id).localeCompare(String(b.id)));
+      let contador = maiorAtual + 1;
+      ordenados.forEach(s => { s.numero = contador++; });
+      alterou = true;
+    }
+
+    sales.forEach(s => {
+      if(s.duzia === undefined){ s.duzia = 0; alterou = true; }
+      if(s.cartela === undefined){ s.cartela = 0; alterou = true; }
+      if(s.avulso === undefined){ s.avulso = s.quantidade || 0; alterou = true; }
+      if(s.tipoPagamento === undefined){ s.tipoPagamento = null; alterou = true; }
+      if(s.dataPagamento === undefined){ s.dataPagamento = null; alterou = true; }
+      if(s.atualizadoEm === undefined){ s.atualizadoEm = new Date().toISOString(); alterou = true; }
+      if(s.excluidoEm === undefined){ s.excluidoEm = null; alterou = true; }
+    });
+
+    const maiorNumero = sales.reduce((max, s) => Math.max(max, s.numero || 0), 0);
+    const proximoAtual = parseInt(storageGet('next_numero') || '0', 10);
+    if(proximoAtual <= maiorNumero){
+      storageSet('next_numero', String(maiorNumero + 1));
+    }
+
+    if(alterou) await idbSubstituirTudo('sales', sales);
+  }
+
+  function proximoNumeroPedido(){
+    const n = parseInt(storageGet('next_numero') || '1', 10);
+    storageSet('next_numero', String(n + 1));
+    return n;
+  }
+
+  async function saveSales(){
+    await idbSubstituirTudo('sales', sales);
+    agendarSincronizacao();
+  }
+
+  async function saveClients(){
+    const arr = Object.keys(clients).map(k => clients[k]);
+    await idbSubstituirTudo('clients', arr);
+    agendarSincronizacao();
+  }
+
+  // ---------- Formulário: abrir / fechar ----------
+  const form = document.getElementById('form-venda');
+  const btnNovaVenda = document.getElementById('btn-nova-venda');
+  const btnCancelar = document.getElementById('btn-cancelar');
+  const fNome = document.getElementById('f-nome');
+  const fTelefone = document.getElementById('f-telefone');
+  const fData = document.getElementById('f-data');
+  const fQtdAvulso = document.getElementById('f-qtd-avulso');
+  const fValor = document.getElementById('f-valor');
+  const fStatus = document.getElementById('f-status');
+  const formEditBadge = document.getElementById('form-edit-badge');
+  const formEditNumero = document.getElementById('form-edit-numero');
+
+  const btnAddDuzia = document.getElementById('btn-add-duzia');
+  const btnSubDuzia = document.getElementById('btn-sub-duzia');
+  const countDuziaEl = document.getElementById('count-duzia');
+  const btnAddCartela = document.getElementById('btn-add-cartela');
+  const btnSubCartela = document.getElementById('btn-sub-cartela');
+  const countCartelaEl = document.getElementById('count-cartela');
+  const qtdTotalLabel = document.getElementById('qtd-total-label');
+
+  let editingId = null;
+  let qtyDuzia = 0;
+  let qtyCartela = 0;
+  let formPagamentoInfo = null;
+  let formStatusAnterior = 'vendido';
+
+  function atualizarQtdTotal(){
+    countDuziaEl.textContent = qtyDuzia;
+    countCartelaEl.textContent = qtyCartela;
+    const avulso = parseInt(fQtdAvulso.value || '0', 10) || 0;
+    const total = qtyDuzia * 12 + qtyCartela * 30 + avulso;
+    qtdTotalLabel.textContent = total + (total === 1 ? ' ovo' : ' ovos');
+    return total;
+  }
+
+  function resetQtyPicker(){
+    qtyDuzia = 0;
+    qtyCartela = 0;
+    fQtdAvulso.value = '';
+    atualizarQtdTotal();
+  }
+
+  btnAddDuzia.addEventListener('click', () => { qtyDuzia++; atualizarQtdTotal(); });
+  btnSubDuzia.addEventListener('click', () => { qtyDuzia = Math.max(0, qtyDuzia - 1); atualizarQtdTotal(); });
+  btnAddCartela.addEventListener('click', () => { qtyCartela++; atualizarQtdTotal(); });
+  btnSubCartela.addEventListener('click', () => { qtyCartela = Math.max(0, qtyCartela - 1); atualizarQtdTotal(); });
+  fQtdAvulso.addEventListener('input', atualizarQtdTotal);
+
+  function openForm(){
+    form.style.display = 'flex';
+    btnNovaVenda.style.display = 'none';
+    if(!fData.value){
+      fData.value = new Date().toISOString().slice(0,10);
+    }
+    fNome.focus();
+  }
+
+  function closeForm(){
+    form.style.display = 'none';
+    btnNovaVenda.style.display = 'flex';
+    form.reset();
+    editingId = null;
+    esconderSugestoes();
+    resetQtyPicker();
+    formPagamentoInfo = null;
+    formStatusAnterior = 'vendido';
+    formEditBadge.style.display = 'none';
+  }
+
+  btnNovaVenda.addEventListener('click', openForm);
+  btnCancelar.addEventListener('click', closeForm);
+
+  fStatus.addEventListener('change', async () => {
+    if(fStatus.value === 'pago'){
+      const resultado = await abrirModalPagamento(formPagamentoInfo);
+      if(!resultado){
+        fStatus.value = formStatusAnterior;
+        return;
+      }
+      formPagamentoInfo = resultado;
+    }else{
+      formPagamentoInfo = null;
+    }
+    formStatusAnterior = fStatus.value;
+  });
+
+  // Autocomplete: dropdown com clientes já cadastrados
+  const sugestoesEl = document.getElementById('lista-sugestoes-clientes');
+
+  function listaClientesOrdenada(){
+    return Object.values(clients).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  }
+
+  function mostrarSugestoes(filtro){
+    const termo = filtro.trim().toLowerCase();
+    const todos = listaClientesOrdenada();
+    const encontrados = termo
+      ? todos.filter(c => c.nome.toLowerCase().includes(termo))
+      : todos;
+
+    if(encontrados.length === 0){
+      esconderSugestoes();
+      return;
+    }
+
+    sugestoesEl.innerHTML = '';
+    encontrados.slice(0, 8).forEach(c => {
+      const item = document.createElement('div');
+      item.className = 'suggestion-item';
+      item.innerHTML = `
+        <div class="suggestion-name">${escapeHtml(c.nome)}</div>
+        ${c.telefone ? `<div class="suggestion-phone">${escapeHtml(c.telefone)}</div>` : ''}
+      `;
+      item.addEventListener('mousedown', (e) => {
+        // mousedown (antes do blur) garante que o clique seja capturado
+        e.preventDefault();
+        fNome.value = c.nome;
+        fTelefone.value = c.telefone || '';
+        esconderSugestoes();
+      });
+      sugestoesEl.appendChild(item);
+    });
+    sugestoesEl.style.display = 'block';
+  }
+
+  function esconderSugestoes(){
+    sugestoesEl.style.display = 'none';
+    sugestoesEl.innerHTML = '';
+  }
+
+  fNome.addEventListener('input', () => {
+    const key = fNome.value.trim().toLowerCase();
+    if(clients[key] && clients[key].telefone){
+      fTelefone.value = clients[key].telefone;
+    }
+    mostrarSugestoes(fNome.value);
+  });
+
+  fNome.addEventListener('focus', () => {
+    mostrarSugestoes(fNome.value);
+  });
+
+  fNome.addEventListener('blur', () => {
+    esconderSugestoes();
+  });
+
+  // ---------- Modal: confirmação de pagamento ----------
+  const modalPagamento = document.getElementById('modal-pagamento');
+  const modalPagamentoData = document.getElementById('modal-pagamento-data');
+  const btnsPagamentoTipo = document.querySelectorAll('.payment-type-btn');
+  const btnPagamentoCancelar = document.getElementById('modal-pagamento-cancelar');
+  const btnPagamentoConfirmar = document.getElementById('modal-pagamento-confirmar');
+
+  let pagamentoModalResolver = null;
+  let pagamentoTipoSelecionado = null;
+
+  btnsPagamentoTipo.forEach(btn => {
+    btn.addEventListener('click', () => {
+      pagamentoTipoSelecionado = btn.dataset.tipo;
+      btnsPagamentoTipo.forEach(b => b.classList.toggle('selected', b === btn));
+    });
+  });
+
+  function abrirModalPagamento(dadosAtuais){
+    pagamentoTipoSelecionado = (dadosAtuais && dadosAtuais.tipoPagamento) || null;
+    btnsPagamentoTipo.forEach(b => b.classList.toggle('selected', b.dataset.tipo === pagamentoTipoSelecionado));
+    modalPagamentoData.value = (dadosAtuais && dadosAtuais.dataPagamento) || new Date().toISOString().slice(0,10);
+    modalPagamento.classList.remove('hidden');
+    return new Promise(resolve => { pagamentoModalResolver = resolve; });
+  }
+
+  function fecharModalPagamento(resultado){
+    modalPagamento.classList.add('hidden');
+    if(pagamentoModalResolver){
+      pagamentoModalResolver(resultado);
+      pagamentoModalResolver = null;
+    }
+  }
+
+  btnPagamentoCancelar.addEventListener('click', () => fecharModalPagamento(null));
+
+  btnPagamentoConfirmar.addEventListener('click', () => {
+    if(!pagamentoTipoSelecionado){
+      alert('Selecione a forma de pagamento (Pix ou Dinheiro).');
+      return;
+    }
+    if(!modalPagamentoData.value){
+      alert('Informe a data do pagamento.');
+      return;
+    }
+    fecharModalPagamento({ tipoPagamento: pagamentoTipoSelecionado, dataPagamento: modalPagamentoData.value });
+  });
+
+  modalPagamento.addEventListener('click', (e) => {
+    if(e.target === modalPagamento) fecharModalPagamento(null);
+  });
+
+  // ---------- Salvar venda ----------
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const nome = fNome.value.trim();
+    const telefone = fTelefone.value.trim();
+    const data = fData.value;
+    const avulso = parseInt(fQtdAvulso.value || '0', 10) || 0;
+    const quantidade = qtyDuzia * 12 + qtyCartela * 30 + avulso;
+    const valor = parseFloat(fValor.value || '0');
+    const status = fStatus.value;
+
+    if(!nome || !data || !quantidade || quantidade <= 0){
+      alert('Preencha nome, data e uma quantidade válida de ovos (dúzia, cartela ou avulso).');
+      return;
+    }
+
+    if(status === 'pago' && !formPagamentoInfo){
+      alert('Informe a forma e a data do pagamento.');
+      return;
+    }
+
+    const tipoPagamento = status === 'pago' ? formPagamentoInfo.tipoPagamento : null;
+    const dataPagamento = status === 'pago' ? formPagamentoInfo.dataPagamento : null;
+
+    const agora = new Date().toISOString();
+
+    if(editingId){
+      const idx = sales.findIndex(s => s.id === editingId);
+      if(idx > -1){
+        sales[idx] = {
+          id: editingId,
+          numero: sales[idx].numero,
+          nome, telefone, data,
+          duzia: qtyDuzia, cartela: qtyCartela, avulso,
+          quantidade, valor, status, tipoPagamento, dataPagamento,
+          atualizadoEm: agora, excluidoEm: null
+        };
+      }
+    }else{
+      sales.unshift({
+        id: 'v' + Date.now(),
+        numero: proximoNumeroPedido(),
+        nome, telefone, data,
+        duzia: qtyDuzia, cartela: qtyCartela, avulso,
+        quantidade, valor, status, tipoPagamento, dataPagamento,
+        atualizadoEm: agora, excluidoEm: null
+      });
+    }
+
+    // Salva/atualiza o cliente para autocomplete futuro
+    const key = nome.toLowerCase();
+    clients[key] = {
+      nomeKey: key,
+      nome,
+      telefone: telefone || (clients[key] ? clients[key].telefone : ''),
+      atualizadoEm: agora
+    };
+
+    await saveSales();
+    await saveClients();
+    renderSales();
+    closeForm();
+  });
+
+  // ---------- Filtros da lista de vendas ----------
+  const btnToggleFiltros = document.getElementById('btn-toggle-filtros');
+  const painelFiltros = document.getElementById('painel-filtros');
+  const filtroBadge = document.getElementById('filtro-badge');
+  const fFiltroNome = document.getElementById('f-filtro-nome');
+  const fFiltroStatus = document.getElementById('f-filtro-status');
+  const fFiltroDe = document.getElementById('f-filtro-de');
+  const fFiltroAte = document.getElementById('f-filtro-ate');
+  const btnLimparFiltros = document.getElementById('btn-limpar-filtros');
+
+  btnToggleFiltros.addEventListener('click', () => {
+    painelFiltros.style.display = painelFiltros.style.display === 'none' ? 'flex' : 'none';
+  });
+
+  function contarFiltrosAtivos(){
+    let n = 0;
+    if(fFiltroNome.value.trim()) n++;
+    if(fFiltroStatus.value !== 'todos') n++;
+    if(fFiltroDe.value) n++;
+    if(fFiltroAte.value) n++;
+    return n;
+  }
+
+  function atualizarBadgeFiltros(){
+    const n = contarFiltrosAtivos();
+    if(n > 0){
+      filtroBadge.style.display = 'flex';
+      filtroBadge.textContent = n;
+      btnToggleFiltros.classList.add('has-filters');
+    }else{
+      filtroBadge.style.display = 'none';
+      btnToggleFiltros.classList.remove('has-filters');
+    }
+  }
+
+  [fFiltroNome, fFiltroStatus, fFiltroDe, fFiltroAte].forEach(el => {
+    const evento = (el.tagName === 'SELECT') ? 'change' : 'input';
+    el.addEventListener(evento, () => {
+      atualizarBadgeFiltros();
+      renderSales();
+    });
+  });
+
+  btnLimparFiltros.addEventListener('click', () => {
+    fFiltroNome.value = '';
+    fFiltroStatus.value = 'todos';
+    fFiltroDe.value = '';
+    fFiltroAte.value = '';
+    atualizarBadgeFiltros();
+    renderSales();
+  });
+
+  function aplicarFiltros(lista){
+    const nome = fFiltroNome.value.trim().toLowerCase();
+    const status = fFiltroStatus.value;
+    const de = fFiltroDe.value;
+    const ate = fFiltroAte.value;
+
+    return lista.filter(s => {
+      if(nome && !s.nome.toLowerCase().includes(nome)) return false;
+      if(status !== 'todos' && s.status !== status) return false;
+      if(de && s.data < de) return false;
+      if(ate && s.data > ate) return false;
+      return true;
+    });
+  }
+
+  // ---------- Renderização da lista ----------
+  const listaVendasEl = document.getElementById('lista-vendas');
+  const vendasEmptyEl = document.getElementById('vendas-empty');
+  const vendasEmptyFiltroEl = document.getElementById('vendas-empty-filtro');
+
+  const statusLabel = { vendido: 'Vendido', entregue: 'Entregue', pago: 'Pago' };
+
+  function formatMoney(v){
+    return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  }
+
+  function formatDate(iso){
+    const [y,m,d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  }
+
+  function formatNumero(n){
+    return '#' + String(n).padStart(4, '0');
+  }
+
+  function descreverQuantidade(s){
+    const partes = [];
+    if(s.duzia) partes.push(`${s.duzia} dúzia${s.duzia > 1 ? 's' : ''}`);
+    if(s.cartela) partes.push(`${s.cartela} cartela${s.cartela > 1 ? 's' : ''}`);
+    if(s.avulso) partes.push(`${s.avulso} avulso${s.avulso > 1 ? 's' : ''}`);
+    if(partes.length === 0) return `${s.quantidade} ovos`;
+    return partes.join(' + ') + ` (${s.quantidade} ovos)`;
+  }
+
+  function renderSales(){
+    listaVendasEl.innerHTML = '';
+
+    const ativas = salesAtivas();
+
+    if(ativas.length === 0){
+      vendasEmptyEl.style.display = 'flex';
+      vendasEmptyFiltroEl.style.display = 'none';
+      return;
+    }
+    vendasEmptyEl.style.display = 'none';
+
+    const filtradas = aplicarFiltros(ativas);
+
+    if(filtradas.length === 0){
+      vendasEmptyFiltroEl.style.display = 'flex';
+      return;
+    }
+    vendasEmptyFiltroEl.style.display = 'none';
+
+    const sorted = [...filtradas].sort((a,b) => b.data.localeCompare(a.data));
+
+    sorted.forEach(sale => {
+      const item = document.createElement('div');
+      item.className = 'sale-item';
+      item.innerHTML = `
+        <div class="top-row">
+          <div>
+            <div class="buyer">${escapeHtml(sale.nome)}</div>
+            <div class="meta"><span class="order-badge">${formatNumero(sale.numero)}</span> · ${formatDate(sale.data)} · ${descreverQuantidade(sale)}${sale.telefone ? ' · ' + escapeHtml(sale.telefone) : ''}</div>
+            ${sale.status === 'pago' ? `<div class="meta payment-meta">${sale.tipoPagamento === 'pix' ? 'Pix' : 'Dinheiro'}${sale.dataPagamento ? ' · ' + formatDate(sale.dataPagamento) : ''}</div>` : ''}
+          </div>
+          <div class="value">${formatMoney(sale.valor)}</div>
+        </div>
+        <div class="bottom-row">
+          <select class="status-select badge ${sale.status}" data-id="${sale.id}">
+            <option value="vendido" ${sale.status==='vendido'?'selected':''}>Vendido</option>
+            <option value="entregue" ${sale.status==='entregue'?'selected':''}>Entregue</option>
+            <option value="pago" ${sale.status==='pago'?'selected':''}>Pago</option>
+          </select>
+          <div style="display:flex; gap:6px;">
+            <button class="icon-btn btn-edit" data-id="${sale.id}" aria-label="Editar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            </button>
+            <button class="icon-btn btn-delete" data-id="${sale.id}" aria-label="Excluir">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+            </button>
+          </div>
+        </div>
+      `;
+      listaVendasEl.appendChild(item);
+    });
+
+    // Alterar status diretamente pela lista
+    listaVendasEl.querySelectorAll('.status-select').forEach(sel => {
+      sel.addEventListener('change', async () => {
+        const id = sel.dataset.id;
+        const s = sales.find(x => x.id === id);
+        if(!s) return;
+        const statusAnterior = s.status;
+        const novoStatus = sel.value;
+
+        if(novoStatus === 'pago'){
+          const resultado = await abrirModalPagamento(statusAnterior === 'pago' ? s : null);
+          if(!resultado){
+            sel.value = statusAnterior;
+            return;
+          }
+          s.tipoPagamento = resultado.tipoPagamento;
+          s.dataPagamento = resultado.dataPagamento;
+        }else{
+          s.tipoPagamento = null;
+          s.dataPagamento = null;
+        }
+
+        s.status = novoStatus;
+        s.atualizadoEm = new Date().toISOString();
+        await saveSales();
+        renderSales();
+      });
+    });
+
+    // Editar
+    listaVendasEl.querySelectorAll('.btn-edit').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const s = sales.find(x => x.id === btn.dataset.id);
+        if(!s) return;
+        editingId = s.id;
+        fNome.value = s.nome;
+        fTelefone.value = s.telefone;
+        fData.value = s.data;
+        fValor.value = s.valor;
+        fStatus.value = s.status;
+        qtyDuzia = s.duzia || 0;
+        qtyCartela = s.cartela || 0;
+        fQtdAvulso.value = s.avulso ? String(s.avulso) : '';
+        atualizarQtdTotal();
+        formStatusAnterior = s.status;
+        formPagamentoInfo = s.status === 'pago' ? { tipoPagamento: s.tipoPagamento, dataPagamento: s.dataPagamento } : null;
+        formEditNumero.textContent = formatNumero(s.numero);
+        formEditBadge.style.display = 'block';
+        openForm();
+      });
+    });
+
+    // Excluir (exclusão lógica: mantém o registro marcado como excluído para que
+    // a exclusão também seja sincronizada e removida da planilha e de outros aparelhos)
+    listaVendasEl.querySelectorAll('.btn-delete').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if(!confirm('Excluir esta venda?')) return;
+        const s = sales.find(x => x.id === btn.dataset.id);
+        if(s){
+          const agora = new Date().toISOString();
+          s.excluidoEm = agora;
+          s.atualizadoEm = agora;
+        }
+        await saveSales();
+        renderSales();
+      });
+    });
+
+    renderDashboard();
+    renderClientsCards();
+  }
+
+  // ---------- Dashboard ----------
+  const fDashDe = document.getElementById('f-dash-de');
+  const fDashAte = document.getElementById('f-dash-ate');
+  const btnDashLimpar = document.getElementById('btn-dash-limpar');
+  const dashTotalVendido = document.getElementById('dash-total-vendido');
+  const dashRecebido = document.getElementById('dash-recebido');
+  const dashAReceber = document.getElementById('dash-a-receber');
+  const dashQtdVendas = document.getElementById('dash-qtd-vendas');
+  const dashQtdOvos = document.getElementById('dash-qtd-ovos');
+  const dashEmpty = document.getElementById('dash-empty');
+  const dashGrid = document.querySelector('.dash-grid');
+  const dashResumoCard = document.querySelector('#tab-dashboard .card');
+
+  function renderDashboard(){
+    const de = fDashDe.value;
+    const ate = fDashAte.value;
+
+    const noPeriodo = salesAtivas().filter(s => {
+      if(de && s.data < de) return false;
+      if(ate && s.data > ate) return false;
+      return true;
+    });
+
+    if(noPeriodo.length === 0){
+      dashGrid.style.display = 'none';
+      dashResumoCard.style.display = 'none';
+      dashEmpty.style.display = 'flex';
+      return;
+    }
+    dashGrid.style.display = 'grid';
+    dashResumoCard.style.display = 'block';
+    dashEmpty.style.display = 'none';
+
+    const totalVendido = noPeriodo.reduce((acc, s) => acc + s.valor, 0);
+    const recebido = noPeriodo.filter(s => s.status === 'pago').reduce((acc, s) => acc + s.valor, 0);
+    const aReceber = totalVendido - recebido;
+    const totalOvos = noPeriodo.reduce((acc, s) => acc + s.quantidade, 0);
+
+    dashTotalVendido.textContent = formatMoney(totalVendido);
+    dashRecebido.textContent = formatMoney(recebido);
+    dashAReceber.textContent = formatMoney(aReceber);
+    dashQtdVendas.textContent = noPeriodo.length;
+    dashQtdOvos.textContent = totalOvos;
+  }
+
+  [fDashDe, fDashAte].forEach(el => {
+    el.addEventListener('input', renderDashboard);
+  });
+
+  btnDashLimpar.addEventListener('click', () => {
+    fDashDe.value = '';
+    fDashAte.value = '';
+    renderDashboard();
+  });
+
+  // ---------- Aba Clientes ----------
+  const listaClientesCardsEl = document.getElementById('lista-clientes-cards');
+  const clientesEmptyEl = document.getElementById('clientes-empty');
+
+  function renderClientsCards(){
+    listaClientesCardsEl.innerHTML = '';
+
+    const nomes = Object.keys(clients);
+    if(nomes.length === 0){
+      clientesEmptyEl.style.display = 'flex';
+      return;
+    }
+    clientesEmptyEl.style.display = 'none';
+
+    const ordenados = nomes
+      .map(key => clients[key])
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+    ordenados.forEach(c => {
+      const key = c.nome.toLowerCase();
+      const devendo = salesAtivas()
+        .filter(s => s.nome.toLowerCase() === key && s.status !== 'pago')
+        .reduce((acc, s) => acc + s.valor, 0);
+
+      const item = document.createElement('div');
+      item.className = 'client-item';
+
+      const telHref = c.telefone ? `tel:${c.telefone.replace(/[^\d+]/g, '')}` : null;
+
+      item.innerHTML = `
+        <div class="client-info">
+          <div class="client-name">${escapeHtml(c.nome)}</div>
+          ${
+            telHref
+              ? `<a class="client-phone" href="${telHref}" onclick="event.stopPropagation()">${escapeHtml(c.telefone)}</a>`
+              : `<span class="client-phone no-phone">Sem telefone</span>`
+          }
+        </div>
+        <div class="client-debt">
+          <div class="amount ${devendo > 0 ? 'devendo' : 'em-dia'}">${devendo > 0 ? formatMoney(devendo) : 'Em dia'}</div>
+          <div class="tag">${devendo > 0 ? 'devendo' : ''}</div>
+        </div>
+      `;
+      item.addEventListener('click', () => abrirPedidosCliente(c.nome));
+      listaClientesCardsEl.appendChild(item);
+    });
+  }
+
+  // ---------- Modal: histórico de pedidos do cliente ----------
+  const modalClientePedidos = document.getElementById('modal-cliente-pedidos');
+  const modalClienteNome = document.getElementById('modal-cliente-nome');
+  const modalClienteResumo = document.getElementById('modal-cliente-resumo');
+  const modalClienteListaPedidos = document.getElementById('modal-cliente-lista-pedidos');
+  const btnFecharModalCliente = document.getElementById('btn-fechar-modal-cliente');
+
+  function abrirPedidosCliente(nomeCliente){
+    const key = nomeCliente.toLowerCase();
+    const pedidos = salesAtivas()
+      .filter(s => s.nome.toLowerCase() === key)
+      .sort((a, b) => b.data.localeCompare(a.data));
+
+    modalClienteNome.textContent = nomeCliente;
+
+    const devendo = pedidos
+      .filter(p => p.status !== 'pago')
+      .reduce((acc, p) => acc + p.valor, 0);
+
+    modalClienteResumo.textContent =
+      `${pedidos.length} ${pedidos.length === 1 ? 'pedido' : 'pedidos'} · ${devendo > 0 ? 'Deve ' + formatMoney(devendo) : 'Em dia'}`;
+
+    modalClienteListaPedidos.innerHTML = '';
+    pedidos.forEach(p => {
+      const div = document.createElement('div');
+      div.className = 'pedido-item';
+      div.innerHTML = `
+        <div class="pedido-top">
+          <span class="pedido-numero">${formatNumero(p.numero)}</span>
+          <span class="badge ${p.status}">${statusLabel[p.status]}</span>
+        </div>
+        <div class="pedido-meta">${formatDate(p.data)} · ${descreverQuantidade(p)}</div>
+        <div class="pedido-bottom">
+          <span class="pedido-valor">${formatMoney(p.valor)}</span>
+          ${p.status === 'pago' ? `<span class="pedido-pagamento">${p.tipoPagamento === 'pix' ? 'Pix' : 'Dinheiro'}${p.dataPagamento ? ' · ' + formatDate(p.dataPagamento) : ''}</span>` : ''}
+        </div>
+      `;
+      modalClienteListaPedidos.appendChild(div);
+    });
+
+    modalClientePedidos.classList.remove('hidden');
+  }
+
+  btnFecharModalCliente.addEventListener('click', () => {
+    modalClientePedidos.classList.add('hidden');
+  });
+
+  modalClientePedidos.addEventListener('click', (e) => {
+    if(e.target === modalClientePedidos) modalClientePedidos.classList.add('hidden');
+  });
+
+  function escapeHtml(str){
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // ---------- Backup: baixar e restaurar ----------
+  const btnBackupBaixar = document.getElementById('btn-backup-baixar');
+  const btnBackupRestaurar = document.getElementById('btn-backup-restaurar');
+  const inputBackupArquivo = document.getElementById('input-backup-arquivo');
+
+  btnBackupBaixar.addEventListener('click', () => {
+    const backup = {
+      app: 'recanto-das-aves',
+      versao: 1,
+      geradoEm: new Date().toISOString(),
+      sales,
+      clients
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const hoje = new Date().toISOString().slice(0,10);
+    a.href = url;
+    a.download = `backup-recanto-das-aves-${hoje}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  });
+
+  btnBackupRestaurar.addEventListener('click', () => {
+    inputBackupArquivo.value = '';
+    inputBackupArquivo.click();
+  });
+
+  inputBackupArquivo.addEventListener('change', () => {
+    const file = inputBackupArquivo.files[0];
+    if(!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      let dados;
+      try{
+        dados = JSON.parse(reader.result);
+      }catch(e){
+        alert('Arquivo inválido. Selecione um arquivo de backup (.json) gerado pelo próprio app.');
+        return;
+      }
+
+      if(!dados || !Array.isArray(dados.sales) || typeof dados.clients !== 'object'){
+        alert('Este arquivo não parece ser um backup válido do Recanto das Aves.');
+        return;
+      }
+
+      const substituir = confirm(
+        'Restaurar este backup vai SUBSTITUIR todas as vendas e clientes salvos neste aparelho pelos dados do arquivo. Deseja continuar?'
+      );
+      if(!substituir) return;
+
+      const agora = new Date().toISOString();
+      sales = dados.sales.map(s => ({
+        ...s,
+        atualizadoEm: s.atualizadoEm || agora,
+        excluidoEm: s.excluidoEm || null
+      }));
+      clients = {};
+      Object.keys(dados.clients).forEach(key => {
+        clients[key] = {
+          nomeKey: key,
+          nome: dados.clients[key].nome,
+          telefone: dados.clients[key].telefone || '',
+          atualizadoEm: dados.clients[key].atualizadoEm || agora
+        };
+      });
+      await saveSales();
+      await saveClients();
+      await migrarDadosAntigos();
+      renderSales();
+      alert('Backup restaurado com sucesso.');
+      if(navigator.onLine && msalAccount) sincronizarTudo('restauracao');
+    };
+    reader.onerror = () => {
+      alert('Não foi possível ler o arquivo selecionado.');
+    };
+    reader.readAsText(file);
+  });
+
+  // =========================================================================
+  // ---------- Sincronização com o Excel Online (Microsoft Graph API) ----------
+  // =========================================================================
+  // Como funciona:
+  // 1. Tudo é sempre salvo primeiro no IndexedDB deste aparelho (bloco acima) —
+  //    o app funciona 100% offline, sempre.
+  // 2. Quando há internet e o dono está logado com a conta Microsoft, o app lê
+  //    a planilha, mescla com os dados locais (o registro mais recente vence,
+  //    usando o campo "atualizadoEm") e regrava a planilha inteira.
+  // 3. Isso roda sozinho: ao abrir o app, ao voltar a ficar online, alguns
+  //    segundos depois de qualquer alteração, e a cada poucos minutos.
+
+  const COLUNAS_VENDAS = ['id','numero','nome','telefone','data','duzia','cartela','avulso','quantidade','valor','status','tipoPagamento','dataPagamento','atualizadoEm','excluidoEm'];
+  const COLUNAS_CLIENTES = ['nomeKey','nome','telefone','atualizadoEm'];
+  const ABA_VENDAS = 'Vendas';
+  const ABA_CLIENTES = 'Clientes';
+  const MSAL_SCOPES = ['Files.ReadWrite'];
+
+  let msalInstance = null;
+  let msalAccount = null;
+  let sincronizando = false;
+  let sincronizacaoPendente = false;
+  let syncDebounceTimer = null;
+
+  // ---- Elementos da interface de sincronização ----
+  const syncDotEl = document.getElementById('sync-dot');
+  const syncStatusTextEl = document.getElementById('sync-status-text');
+  const headerSyncDotEl = document.getElementById('header-sync-dot');
+  const btnSyncConectar = document.getElementById('btn-sync-conectar');
+  const btnSyncAgora = document.getElementById('btn-sync-agora');
+  const btnSyncDesconectar = document.getElementById('btn-sync-desconectar');
+  const btnSyncToggleConfig = document.getElementById('btn-sync-toggle-config');
+  const syncConfigEl = document.getElementById('sync-config');
+  const fSyncClientId = document.getElementById('f-sync-client-id');
+  const fSyncLink = document.getElementById('f-sync-link');
+  const btnSyncSalvarConfig = document.getElementById('btn-sync-salvar-config');
+
+  function getConfigClientId(){
+    return storageGet('msal_client_id') || '';
+  }
+  function getConfigLinkPlanilha(){
+    return storageGet('planilha_link') || '';
+  }
+
+  btnSyncToggleConfig.addEventListener('click', () => {
+    const aberto = syncConfigEl.style.display !== 'none';
+    syncConfigEl.style.display = aberto ? 'none' : 'flex';
+    if(!aberto){
+      fSyncClientId.value = getConfigClientId();
+      fSyncLink.value = getConfigLinkPlanilha();
+    }
+  });
+
+  btnSyncSalvarConfig.addEventListener('click', async () => {
+    const clientId = fSyncClientId.value.trim();
+    const link = fSyncLink.value.trim();
+    if(!clientId || !link){
+      alert('Preencha o ID do aplicativo e o link da planilha.');
+      return;
+    }
+    storageSet('msal_client_id', clientId);
+    storageSet('planilha_link', link);
+    await idbKvSet('planilha_ref', null); // força re-resolver o arquivo com o novo link
+    syncConfigEl.style.display = 'none';
+    await inicializarMsal();
+    alert('Configuração salva. Agora clique em "Conectar com a Microsoft".');
+  });
+
+  // ---- MSAL: login/logout ----
+  async function inicializarMsal(){
+    const clientId = getConfigClientId();
+    if(!clientId || typeof msal === 'undefined'){
+      atualizarStatusSincronizacao();
+      return;
+    }
+    try{
+      msalInstance = new msal.PublicClientApplication({
+        auth: {
+          clientId: clientId,
+          authority: 'https://login.microsoftonline.com/common',
+          redirectUri: window.location.href.split('#')[0].split('?')[0]
+        },
+        cache: { cacheLocation: 'localStorage' }
+      });
+      await msalInstance.initialize();
+      const resp = await msalInstance.handleRedirectPromise();
+      if(resp && resp.account){
+        msalAccount = resp.account;
+      }else{
+        const contas = msalInstance.getAllAccounts();
+        if(contas.length) msalAccount = contas[0];
+      }
+      if(msalAccount) msalInstance.setActiveAccount(msalAccount);
+    }catch(e){
+      console.error('Erro ao iniciar MSAL', e);
+    }
+    atualizarStatusSincronizacao();
+    if(msalAccount && navigator.onLine) sincronizarTudo('inicializacao');
+  }
+
+  btnSyncConectar.addEventListener('click', async () => {
+    if(!getConfigClientId() || !getConfigLinkPlanilha()){
+      syncConfigEl.style.display = 'flex';
+      fSyncClientId.value = getConfigClientId();
+      fSyncLink.value = getConfigLinkPlanilha();
+      alert('Antes de conectar, preencha a configuração da integração abaixo.');
+      return;
+    }
+    if(!msalInstance) await inicializarMsal();
+    if(!msalInstance) return;
+    try{
+      await msalInstance.loginRedirect({ scopes: MSAL_SCOPES });
+    }catch(e){
+      console.error('Erro ao entrar com a Microsoft', e);
+      alert('Não foi possível iniciar o login com a Microsoft.');
+    }
+  });
+
+  btnSyncDesconectar.addEventListener('click', async () => {
+    if(!msalInstance || !msalAccount) return;
+    if(!confirm('Desconectar da Microsoft? Os dados salvos neste aparelho não serão apagados.')) return;
+    try{
+      await msalInstance.logoutRedirect({ account: msalAccount });
+    }catch(e){
+      console.error('Erro ao sair', e);
+    }
+  });
+
+  btnSyncAgora.addEventListener('click', () => sincronizarTudo('manual'));
+
+  async function obterToken(){
+    if(!msalInstance || !msalAccount) throw new Error('Não conectado à Microsoft.');
+    try{
+      const r = await msalInstance.acquireTokenSilent({ scopes: MSAL_SCOPES, account: msalAccount });
+      return r.accessToken;
+    }catch(e){
+      await msalInstance.acquireTokenRedirect({ scopes: MSAL_SCOPES, account: msalAccount });
+      throw new Error('Redirecionando para novo login...');
+    }
+  }
+
+  // ---- Chamadas à Microsoft Graph API ----
+  async function graphFetch(caminho, opcoes){
+    opcoes = opcoes || {};
+    const token = await obterToken();
+    const resp = await fetch('https://graph.microsoft.com/v1.0' + caminho, Object.assign({}, opcoes, {
+      headers: Object.assign({
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json'
+      }, opcoes.headers || {})
+    }));
+    if(!resp.ok){
+      const texto = await resp.text().catch(() => '');
+      throw new Error('Erro na planilha (' + resp.status + '): ' + texto.slice(0, 200));
+    }
+    if(resp.status === 204) return null;
+    return resp.json();
+  }
+
+  function codificarLinkCompartilhado(url){
+    const base64 = btoa(unescape(encodeURIComponent(url)))
+      .replace(/=+$/, '')
+      .replace(/\//g, '_')
+      .replace(/\+/g, '-');
+    return 'u!' + base64;
+  }
+
+  async function resolverArquivoPlanilha(){
+    const cache = await idbKvGet('planilha_ref');
+    if(cache && cache.driveId && cache.itemId) return cache;
+
+    const link = getConfigLinkPlanilha();
+    if(!link) throw new Error('Link da planilha não configurado.');
+
+    const encoded = codificarLinkCompartilhado(link);
+    const item = await graphFetch(`/shares/${encoded}/driveItem`);
+    const ref = { driveId: item.parentReference.driveId, itemId: item.id };
+    await idbKvSet('planilha_ref', ref);
+    return ref;
+  }
+
+  function colunaParaLetra(n){
+    let s = '';
+    while(n > 0){
+      const m = (n - 1) % 26;
+      s = String.fromCharCode(65 + m) + s;
+      n = Math.floor((n - m) / 26);
+    }
+    return s;
+  }
+
+  async function lerAba(nomeAba){
+    const { driveId, itemId } = await resolverArquivoPlanilha();
+    const caminho = `/drives/${driveId}/items/${itemId}/workbook/worksheets('${nomeAba}')/usedRange(valuesOnly=true)`;
+    const dados = await graphFetch(caminho);
+    return (dados && dados.values) ? dados.values : [];
+  }
+
+  async function escreverAba(nomeAba, colunas, linhasDados){
+    const { driveId, itemId } = await resolverArquivoPlanilha();
+    const colFim = colunaParaLetra(colunas.length);
+    const totalLinhas = linhasDados.length + 1; // +1 do cabeçalho
+    const valores = [colunas].concat(linhasDados);
+    const endereco = `A1:${colFim}${totalLinhas}`;
+    const base = `/drives/${driveId}/items/${itemId}/workbook/worksheets('${nomeAba}')`;
+
+    await graphFetch(`${base}/range(address='${endereco}')`, {
+      method: 'PATCH',
+      body: JSON.stringify({ values: valores })
+    });
+
+    // Se a planilha tinha mais linhas de dados que agora (ex: registros mesclados
+    // ficaram em número menor), limpa o excedente para não deixar lixo para trás.
+    const kvKey = 'ultima_linha_' + nomeAba;
+    const ultimaLinhaAnterior = (await idbKvGet(kvKey)) || totalLinhas;
+    if(ultimaLinhaAnterior > totalLinhas){
+      const linhasVazias = Array.from({ length: ultimaLinhaAnterior - totalLinhas }, () => colunas.map(() => ''));
+      const enderecoLimpar = `A${totalLinhas + 1}:${colFim}${ultimaLinhaAnterior}`;
+      await graphFetch(`${base}/range(address='${enderecoLimpar}')`, {
+        method: 'PATCH',
+        body: JSON.stringify({ values: linhasVazias })
+      });
+    }
+    await idbKvSet(kvKey, totalLinhas);
+  }
+
+  // ---- Conversão linha <-> objeto ----
+  function linhaParaVenda(linha){
+    const obj = {};
+    COLUNAS_VENDAS.forEach((campo, i) => { obj[campo] = linha[i]; });
+    obj.numero = obj.numero ? parseInt(obj.numero, 10) : null;
+    obj.duzia = parseInt(obj.duzia, 10) || 0;
+    obj.cartela = parseInt(obj.cartela, 10) || 0;
+    obj.avulso = parseInt(obj.avulso, 10) || 0;
+    obj.quantidade = parseInt(obj.quantidade, 10) || 0;
+    obj.valor = parseFloat(obj.valor) || 0;
+    obj.tipoPagamento = obj.tipoPagamento || null;
+    obj.dataPagamento = obj.dataPagamento || null;
+    obj.atualizadoEm = obj.atualizadoEm || '';
+    obj.excluidoEm = obj.excluidoEm || null;
+    return obj;
+  }
+  function vendaParaLinha(v){
+    return COLUNAS_VENDAS.map(campo => (v[campo] === undefined || v[campo] === null) ? '' : v[campo]);
+  }
+  function linhaParaCliente(linha){
+    const obj = {};
+    COLUNAS_CLIENTES.forEach((campo, i) => { obj[campo] = linha[i]; });
+    obj.atualizadoEm = obj.atualizadoEm || '';
+    return obj;
+  }
+  function clienteParaLinha(c){
+    return COLUNAS_CLIENTES.map(campo => (c[campo] === undefined || c[campo] === null) ? '' : c[campo]);
+  }
+
+  // O registro mais recente (maior atualizadoEm) vence. Assim funciona mesmo
+  // usando o app em mais de um celular ao mesmo tempo.
+  function mesclarPorData(locais, remotos, chave){
+    const mapa = new Map();
+    locais.forEach(item => { if(item[chave]) mapa.set(item[chave], item); });
+    remotos.forEach(item => {
+      if(!item[chave]) return;
+      const existente = mapa.get(item[chave]);
+      if(!existente || (item.atualizadoEm || '') > (existente.atualizadoEm || '')){
+        mapa.set(item[chave], item);
+      }
+    });
+    return Array.from(mapa.values());
+  }
+
+  async function sincronizarVendas(){
+    const linhas = await lerAba(ABA_VENDAS);
+    const remotos = linhas.slice(1).filter(l => l[0]).map(linhaParaVenda);
+    sales = mesclarPorData(sales, remotos, 'id');
+    await idbSubstituirTudo('sales', sales);
+
+    const maiorNumero = sales.reduce((max, s) => Math.max(max, s.numero || 0), 0);
+    const proximoAtual = parseInt(storageGet('next_numero') || '0', 10);
+    if(proximoAtual <= maiorNumero) storageSet('next_numero', String(maiorNumero + 1));
+
+    const linhasParaEnviar = sales.slice()
+      .sort((a, b) => (a.numero || 0) - (b.numero || 0))
+      .map(vendaParaLinha);
+    await escreverAba(ABA_VENDAS, COLUNAS_VENDAS, linhasParaEnviar);
+  }
+
+  async function sincronizarClientes(){
+    const linhas = await lerAba(ABA_CLIENTES);
+    const remotos = linhas.slice(1).filter(l => l[0]).map(linhaParaCliente);
+    const locaisArr = Object.values(clients);
+    const mesclados = mesclarPorData(locaisArr, remotos, 'nomeKey');
+    clients = {};
+    mesclados.forEach(c => { clients[c.nomeKey] = c; });
+    await idbSubstituirTudo('clients', mesclados);
+
+    const linhasParaEnviar = mesclados.slice()
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+      .map(clienteParaLinha);
+    await escreverAba(ABA_CLIENTES, COLUNAS_CLIENTES, linhasParaEnviar);
+  }
+
+  async function sincronizarTudo(origem){
+    if(!msalAccount || !navigator.onLine){
+      atualizarStatusSincronizacao();
+      return;
+    }
+    if(sincronizando){ sincronizacaoPendente = true; return; }
+    sincronizando = true;
+    atualizarStatusSincronizacao('sincronizando');
+    try{
+      await sincronizarVendas();
+      await sincronizarClientes();
+      await idbKvSet('ultima_sincronizacao', new Date().toISOString());
+      atualizarStatusSincronizacao('ok');
+      renderSales();
+    }catch(e){
+      console.error('Erro ao sincronizar (' + origem + ')', e);
+      atualizarStatusSincronizacao('erro', e.message);
+    }finally{
+      sincronizando = false;
+      if(sincronizacaoPendente){
+        sincronizacaoPendente = false;
+        setTimeout(() => sincronizarTudo('fila'), 800);
+      }
+    }
+  }
+
+  function agendarSincronizacao(){
+    if(!msalAccount) return;
+    if(syncDebounceTimer) clearTimeout(syncDebounceTimer);
+    syncDebounceTimer = setTimeout(() => sincronizarTudo('automatico'), 2500);
+  }
+
+  // ---- Indicador visual de status ----
+  async function atualizarStatusSincronizacao(estadoForcado, mensagemErro){
+    let estado = estadoForcado;
+    if(!estado){
+      if(!getConfigClientId() || !getConfigLinkPlanilha()) estado = 'nao-configurado';
+      else if(!msalAccount) estado = 'desconectado';
+      else if(!navigator.onLine) estado = 'offline';
+      else estado = 'ok';
+    }
+
+    [syncDotEl, headerSyncDotEl].forEach(el => {
+      el.classList.remove('ok', 'syncing', 'error', 'offline');
+    });
+    btnSyncConectar.style.display = 'none';
+    btnSyncAgora.style.display = 'none';
+    btnSyncDesconectar.style.display = 'none';
+
+    if(estado === 'nao-configurado'){
+      syncStatusTextEl.textContent = 'Sincronização não configurada. Toque em "Configurar integração" abaixo.';
+    }else if(estado === 'desconectado'){
+      syncStatusTextEl.textContent = 'Não conectado à Microsoft. Os dados ficam salvos só neste aparelho.';
+      btnSyncConectar.style.display = 'inline-block';
+    }else if(estado === 'offline'){
+      syncDotEl.classList.add('offline');
+      headerSyncDotEl.classList.add('offline');
+      syncStatusTextEl.textContent = 'Sem internet no momento. Assim que conectar, a sincronização acontece sozinha.';
+      btnSyncDesconectar.style.display = 'inline-block';
+    }else if(estado === 'sincronizando'){
+      syncDotEl.classList.add('syncing');
+      headerSyncDotEl.classList.add('syncing');
+      syncStatusTextEl.textContent = 'Sincronizando com a planilha...';
+    }else if(estado === 'erro'){
+      syncDotEl.classList.add('error');
+      headerSyncDotEl.classList.add('error');
+      syncStatusTextEl.textContent = 'Erro ao sincronizar: ' + (mensagemErro || 'tente novamente mais tarde.');
+      btnSyncAgora.style.display = 'inline-block';
+      btnSyncDesconectar.style.display = 'inline-block';
+    }else if(estado === 'ok'){
+      syncDotEl.classList.add('ok');
+      headerSyncDotEl.classList.add('ok');
+      const ultima = await idbKvGet('ultima_sincronizacao');
+      const conta = msalAccount ? (msalAccount.username || msalAccount.name || '') : '';
+      syncStatusTextEl.textContent = 'Sincronizado' + (conta ? ' · ' + conta : '') +
+        (ultima ? ' · ' + new Date(ultima).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '');
+      btnSyncAgora.style.display = 'inline-block';
+      btnSyncDesconectar.style.display = 'inline-block';
+    }
+  }
+
+  async function inicializarSincronizacao(){
+    fSyncClientId.value = getConfigClientId();
+    fSyncLink.value = getConfigLinkPlanilha();
+    await atualizarStatusSincronizacao();
+    await inicializarMsal();
+  }
+
+  window.addEventListener('online', () => { atualizarStatusSincronizacao(); sincronizarTudo('ficou-online'); });
+  window.addEventListener('offline', () => atualizarStatusSincronizacao());
+  setInterval(() => { if(navigator.onLine && msalAccount) sincronizarTudo('periodico'); }, 3 * 60 * 1000);
+
+  loadData();
+</script>
+
+</body>
+</html>
