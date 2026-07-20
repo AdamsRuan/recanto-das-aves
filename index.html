@@ -1137,6 +1137,15 @@
     return sales.filter(s => !s.excluidoEm);
   }
 
+  // Mesma lógica para clientes: excluir só marca excluidoEm (exclusão lógica),
+  // nunca some com o registro na hora. Se apagássemos de verdade na hora,
+  // a próxima sincronização traria a linha antiga de volta da planilha, porque
+  // ela ainda estaria lá — foi exatamente isso que causava clientes excluídos
+  // "voltando sozinhos" depois de sincronizar.
+  function clientesAtivos(){
+    return Object.values(clients).filter(c => !c.excluidoEm);
+  }
+
   async function loadData(){
     await migrarDeLocalStorageSeNecessario();
     sales = await idbGetAll('sales');
@@ -1316,7 +1325,7 @@
   const sugestoesEl = document.getElementById('lista-sugestoes-clientes');
 
   function listaClientesOrdenada(){
-    return Object.values(clients).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    return clientesAtivos().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   }
 
   function mostrarSugestoes(filtro){
@@ -1774,15 +1783,15 @@
   function renderClientsCards(){
     listaClientesCardsEl.innerHTML = '';
 
-    const nomes = Object.keys(clients);
-    if(nomes.length === 0){
+    const ativos = clientesAtivos();
+    if(ativos.length === 0){
       clientesEmptyEl.style.display = 'flex';
       return;
     }
     clientesEmptyEl.style.display = 'none';
 
-    const ordenados = nomes
-      .map(key => clients[key])
+    const ordenados = ativos
+      .slice()
       .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 
     ordenados.forEach(c => {
@@ -1907,7 +1916,7 @@
     const oldKey = clienteAtualNoModal.toLowerCase();
     const newKey = novoNome.toLowerCase();
 
-    if(newKey !== oldKey && clients[newKey]){
+    if(newKey !== oldKey && clients[newKey] && !clients[newKey].excluidoEm){
       alert('Já existe um cliente cadastrado com esse nome. Escolha outro nome ou edite o cliente existente.');
       return;
     }
@@ -1956,7 +1965,12 @@
       : `Excluir o cadastro de ${clienteAtualNoModal}?`;
     if(!confirm(mensagem)) return;
 
-    delete clients[key];
+    const c = clients[key];
+    if(c){
+      const agora = new Date().toISOString();
+      c.excluidoEm = agora;
+      c.atualizadoEm = agora;
+    }
     await saveClients();
     renderClientsCards();
     modalClientePedidos.classList.add('hidden');
@@ -2063,7 +2077,7 @@
   //    segundos depois de qualquer alteração, e a cada poucos minutos.
 
   const COLUNAS_VENDAS = ['id','numero','nome','telefone','data','duzia','cartela','avulso','quantidade','valor','status','tipoPagamento','dataPagamento','atualizadoEm','excluidoEm'];
-  const COLUNAS_CLIENTES = ['nomeKey','nome','telefone','atualizadoEm'];
+  const COLUNAS_CLIENTES = ['nomeKey','nome','telefone','atualizadoEm','excluidoEm'];
   const ABA_VENDAS = 'Vendas';
   const ABA_CLIENTES = 'Clientes';
   const MSAL_SCOPES = ['Files.ReadWrite'];
@@ -2376,6 +2390,7 @@
     obj.nome = obj.nome !== undefined && obj.nome !== null ? String(obj.nome) : '';
     obj.telefone = obj.telefone !== undefined && obj.telefone !== null ? String(obj.telefone) : '';
     obj.atualizadoEm = normalizarTimestamp(obj.atualizadoEm);
+    obj.excluidoEm = obj.excluidoEm ? normalizarTimestamp(obj.excluidoEm) : null;
     return obj;
   }
   function clienteParaLinha(c){

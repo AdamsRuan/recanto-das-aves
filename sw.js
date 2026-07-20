@@ -6,7 +6,7 @@
 
 // Aumente este número sempre que publicar uma nova versão do app, para que os
 // aparelhos já instalados baixem os arquivos atualizados.
-const CACHE_VERSION = 'recanto-aves-v5';
+const CACHE_VERSION = 'recanto-aves-v6';
 
 const ARQUIVOS_ESSENCIAIS = [
   './',
